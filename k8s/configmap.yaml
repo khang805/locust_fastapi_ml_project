@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inferqueue-config
+  namespace: inferqueue
+data:
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  RESULT_EXPIRES: "3600"
+  MODEL_NAME: "distilbert-base-uncased-finetuned-sst-2-english"
+  HF_HOME: "/model-cache"

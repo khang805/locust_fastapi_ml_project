@@ -1,0 +1,5 @@
+-r app/requirements.txt
+-r loadtests/requirements.txt
+pytest
+httpx
+flake8

@@ -1,0 +1,56 @@
+name: Load tests (Locust)
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      # torch/transformers are NOT needed for the tests (the model is stubbed), so install only what they use
+      - name: Install test dependencies
+        run: pip install fastapi uvicorn pydantic celery redis prometheus-fastapi-instrumentator httpx pytest "locust>=2.29,<3"
+      - name: Unit tests (API, Celery task + config, mock server)
+        run: python -m pytest -m "not e2e" -q
+
+  locust:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - name: Install test dependencies
+        run: pip install fastapi uvicorn pydantic celery redis prometheus-fastapi-instrumentator httpx pytest "locust>=2.29,<3"
+      - name: Install redis-server (for the real-stack test)
+        run: sudo apt-get update && sudo apt-get install -y redis-server && sudo systemctl stop redis-server
+      - name: Locust test-suite (mock API + real FastAPI/Celery/Redis stack)
+        run: python -m pytest tests/loadtests -m e2e -q
+
+      - name: Start mock API for the SLA gate
+        working-directory: loadtests
+        run: |
+          nohup python -m uvicorn mock_server.fake_api:app --port 8001 > /tmp/mock.log 2>&1 &
+          for i in $(seq 1 20); do curl -fs localhost:8001/health && break || sleep 1; done
+      - name: Locust CI gate (fails the build when SLA thresholds are broken)
+        working-directory: loadtests
+        run: locust --config conf/ci.conf --host http://localhost:8001
+      - name: Upload Locust reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: locust-reports
+          path: loadtests/reports/

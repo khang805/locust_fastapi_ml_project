@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.vscode/
+.idea/
+# Locust output
+loadtests/reports/*
+!loadtests/reports/.gitkeep
+.venv/

@@ -1,0 +1,23 @@
+# Locust inside the cluster, to load-test the API and watch the HPAs (k8s/api-hpa.yaml, k8s/worker-hpa.yaml) react.
+# NOT part of ../kustomization.yaml on purpose. The ConfigMap is generated from files outside this folder, so:
+#
+#   kubectl kustomize --load-restrictor LoadRestrictionsNone k8s/loadtest | kubectl apply -f -
+#   kubectl -n inferqueue port-forward svc/locust-master 8089:8089      # then open http://localhost:8089
+#   kubectl -n inferqueue get hpa -w                                    # watch autoscaling during the test
+#   kubectl kustomize --load-restrictor LoadRestrictionsNone k8s/loadtest | kubectl delete -f -
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: inferqueue
+resources:
+  - locust-master.yaml
+  - locust-worker.yaml
+configMapGenerator:
+  - name: locustfile
+    files:
+      - locustfile.py=../../loadtests/locustfile.py
+      - stages.py=../../loadtests/shapes/stages.py
+      - spike.py=../../loadtests/shapes/spike.py
+      - double_wave.py=../../loadtests/shapes/double_wave.py
+      - texts.txt=../../loadtests/data/texts.txt
+generatorOptions:
+  disableNameSuffixHash: false

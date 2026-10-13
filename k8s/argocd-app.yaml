@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: inferqueue-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/khang805/fastapi-ml-project.git'
+    targetRevision: HEAD
+    path: project/k8s
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: inferqueue
+  syncPolicy: 
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      

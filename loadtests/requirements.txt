@@ -1,0 +1,4 @@
+locust>=2.29,<3
+# only needed for the offline mock API (mock_server/fake_api.py)
+fastapi
+uvicorn

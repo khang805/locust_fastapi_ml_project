@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-download
+  namespace: inferqueue
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: model-download
+          image: inferqueue:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - "-c"
+            - "from transformers import pipeline; import os; pipeline('sentiment-analysis', model=os.environ['MODEL_NAME'])"
+          envFrom:
+            - configMapRef:
+                name: inferqueue-config
+          volumeMounts:
+            - name: model-cache
+              mountPath: /model-cache
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-cache-pvc

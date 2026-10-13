@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - storage.yaml
+  - redis-statefulset.yaml
+  - redis-service.yaml
+  - model-download-job.yaml
+  - api-deployment.yaml
+  - api-service.yaml
+  - api-hpa.yaml
+  - worker-deployment.yaml
+  - worker-hpa.yaml
+  - cronjob-cleanup.yaml
+  - servicemonitor.yaml

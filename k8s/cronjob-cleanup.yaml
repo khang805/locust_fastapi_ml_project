@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: redis-result-cleanup
+  namespace: inferqueue
+spec:
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cleanup
+              image: redis:7-alpine
+              command:
+                - sh
+                - "-c"
+                - 'redis-cli -h redis -a "$REDIS_PASSWORD" --scan --pattern "celery-task-meta-*" | xargs -r redis-cli -h redis -a "$REDIS_PASSWORD" DEL'
+              env:
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: inferqueue-secrets
+                      key: REDIS_PASSWORD
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "32Mi"
+                limits:
+                  cpu: "200m"
+                  memory: "64Mi"

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust-master
+  labels:
+    app: locust-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: locust-master
+  template:
+    metadata:
+      labels:
+        app: locust-master
+    spec:
+      containers:
+        - name: locust
+          image: locustio/locust:latest   # pin a version (e.g. 2.x.y) for reproducible runs
+          args:
+            - -f
+            - /mnt/locust/locustfile.py        # append ",/mnt/locust/spike.py" to use a load shape
+            - --master
+            - --host
+            - http://api                       # k8s/api-service.yaml (port 80 -> 8000)
+            - --expect-workers
+            - "3"
+            - --poll-timeout
+            - "60"
+          ports:
+            - containerPort: 8089
+              name: web
+            - containerPort: 5557
+              name: comm
+          volumeMounts:
+            - name: locustfile
+              mountPath: /mnt/locust
+          resources:
+            requests: {cpu: "100m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "512Mi"}
+      volumes:
+        - name: locustfile
+          configMap:
+            name: locustfile
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust-master
+spec:
+  selector:
+    app: locust-master
+  ports:
+    - name: web
+      port: 8089
+      targetPort: 8089
+    - name: comm
+      port: 5557
+      targetPort: 5557

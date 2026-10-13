@@ -1,0 +1,82 @@
+# InferQueue: real stack + Locust (distributed) + offline mock API.   Nothing starts without a profile.
+#
+#   real stack only ............ docker compose --profile real up --build
+#   real stack + Locust ........ docker compose --profile real --profile loadtest up --build --scale locust-worker=3
+#   mock API + Locust (fast) ... TARGET_HOST=http://mock-api:8000 docker compose --profile mock --profile loadtest up --build
+#
+# Locust web UI: http://localhost:8089      API: http://localhost:8000      mock API: http://localhost:8001
+name: inferqueue
+
+services:
+  redis:
+    profiles: ["real"]
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    profiles: ["real"]
+    build: ./app
+    image: inferqueue-app:local
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      REDIS_HOST: redis
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    profiles: ["real"]
+    image: inferqueue-app:local
+    command: ["celery", "-A", "celery_app.celery_app", "worker", "--loglevel=info", "-c", "1"]
+    environment:
+      REDIS_HOST: redis
+      HF_HOME: /model-cache
+    volumes:
+      - model-cache:/model-cache
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  mock-api:
+    profiles: ["mock"]
+    build: ./loadtests
+    image: inferqueue-loadtests:local
+    entrypoint: ["uvicorn"]
+    command: ["mock_server.fake_api:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      MOCK_LATENCY_MIN: "0.05"
+      MOCK_LATENCY_MAX: "0.25"
+    ports:
+      - "8001:8000"
+
+  locust-master:
+    profiles: ["loadtest"]
+    build: ./loadtests
+    image: inferqueue-loadtests:local
+    command: >
+      -f /mnt/locust/locustfile.py --master --host ${TARGET_HOST:-http://api:8000}
+      --expect-workers 1 --poll-timeout ${POLL_TIMEOUT:-60}
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./loadtests/reports:/mnt/locust/reports
+
+  locust-worker:
+    profiles: ["loadtest"]
+    build: ./loadtests
+    image: inferqueue-loadtests:local
+    command: -f /mnt/locust/locustfile.py --worker --master-host locust-master
+    depends_on:
+      - locust-master
+
+volumes:
+  model-cache:

@@ -1,0 +1,74 @@
+# Local HPA demo overlay (minikube / kind / Docker Desktop Kubernetes). Base manifests in ../k8s are NOT modified.
+#
+#   kubectl apply -k k8s-local
+#
+# What it changes compared to ../k8s :
+#   1. api + worker run the SAME locally built image  ->  inferqueue:latest   (base uses inferqueue-api:v2 for the api)
+#   2. drops the ServiceMonitor (needs the Prometheus-operator CRD, which a plain local cluster does not have)
+#   3. HPA min replicas 3 -> 1, max 8 for both, so a scale-UP and a scale-DOWN are visible and the whole thing fits on a laptop
+#   4. HPA scale-down stabilization 300 s -> 60 s so you do not wait 5 minutes to see pods decrease
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../k8s
+
+images:
+  - name: inferqueue-api
+    newName: inferqueue
+    newTag: latest
+
+patches:
+  - target: {kind: ServiceMonitor, name: api-servicemonitor}
+    patch: |-
+      $patch: delete
+      apiVersion: monitoring.coreos.com/v1
+      kind: ServiceMonitor
+      metadata:
+        name: api-servicemonitor
+
+  # Deployments start at 1 replica; from then on the HPA owns the replica count.
+  - target: {kind: Deployment, name: api}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 1}
+  - target: {kind: Deployment, name: worker}
+    patch: |-
+      - {op: replace, path: /spec/replicas, value: 1}
+
+  - target: {kind: HorizontalPodAutoscaler, name: api-hpa}
+    patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: api-hpa
+      spec:
+        minReplicas: 1
+        maxReplicas: 8
+        behavior:
+          scaleUp:
+            stabilizationWindowSeconds: 0
+            policies:
+              - {type: Pods, value: 2, periodSeconds: 15}
+          scaleDown:
+            stabilizationWindowSeconds: 60
+            policies:
+              - {type: Pods, value: 1, periodSeconds: 30}
+
+  - target: {kind: HorizontalPodAutoscaler, name: worker-hpa}
+    patch: |-
+      apiVersion: autoscaling/v2
+      kind: HorizontalPodAutoscaler
+      metadata:
+        name: worker-hpa
+      spec:
+        minReplicas: 1
+        maxReplicas: 8          # each worker requests 1Gi RAM / 0.5 CPU -> 8 workers need ~8Gi free in the cluster
+        behavior:
+          scaleUp:
+            stabilizationWindowSeconds: 0
+            policies:
+              - {type: Pods, value: 1, periodSeconds: 30}
+          scaleDown:
+            stabilizationWindowSeconds: 60
+            policies:
+              - {type: Pods, value: 1, periodSeconds: 30}
