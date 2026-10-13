@@ -1,4 +1,4 @@
-# InferQueue
+# fastapi_ml_locust
 
 A sentiment-analysis API built with FastAPI, Celery and Redis. A DistilBERT model runs in background workers,
 and on Kubernetes both the API and the workers scale automatically with CPU load (HPA).
